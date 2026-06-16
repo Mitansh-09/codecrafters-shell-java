@@ -28,13 +28,30 @@ public class Main {
                     }
                 }
             } else {
-                System.out.println(input + ": command not found");
+                runExternalCommand(input);
             }
         }
     }
 
-    // Searches PATH directories for an executable matching the command name.
-    // Returns the full path if found, or null if not found.
+    private static void runExternalCommand(String input) {
+        String[] parts = input.split(" ");
+        String command = parts[0];
+
+        if (findInPath(command) == null) {
+            System.out.println(command + ": command not found");
+            return;
+        }
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(parts);
+            pb.inheritIO();
+            Process process = pb.start();
+            process.waitFor();
+        } catch (Exception e) {
+            System.out.println(command + ": command not found");
+        }
+    }
+
     private static String findInPath(String command) {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {

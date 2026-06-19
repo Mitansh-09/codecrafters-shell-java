@@ -6,6 +6,7 @@ import java.util.Scanner;
 
 public class Main {
     static String currentDir = System.getProperty("user.dir");
+    static int jobCounter = 0;
 
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);
@@ -15,6 +16,15 @@ public class Main {
             String input = sc.nextLine();
 
             List<String> tokens = parseInput(input);
+            if (tokens.isEmpty()) continue;
+
+            // detect background job
+            boolean background = false;
+            if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
+                background = true;
+                tokens.remove(tokens.size() - 1);
+            }
+
             if (tokens.isEmpty()) continue;
 
             String redirectStdout = null;
@@ -81,7 +91,8 @@ public class Main {
                     createFileIfRedirected(redirectStderr, appendStderr);
                 }
             } else {
-                runExternalCommand(command, arguments, redirectStdout, appendStdout, redirectStderr, appendStderr);
+                runExternalCommand(command, arguments, redirectStdout, appendStdout,
+                        redirectStderr, appendStderr, background);
             }
         }
     }
@@ -188,7 +199,9 @@ public class Main {
     }
 
     private static void runExternalCommand(String command, List<String> arguments,
-            String redirectStdout, boolean appendStdout, String redirectStderr, boolean appendStderr) {
+            String redirectStdout, boolean appendStdout,
+            String redirectStderr, boolean appendStderr,
+            boolean background) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -222,7 +235,15 @@ public class Main {
             }
 
             Process process = pb.start();
-            process.waitFor();
+
+            if (background) {
+                jobCounter++;
+                long pid = process.pid();
+                System.out.println("[" + jobCounter + "] " + pid);
+                // don't call waitFor() — let it run in background
+            } else {
+                process.waitFor();
+            }
         } catch (Exception e) {
             System.out.println(command + ": command not found");
         }

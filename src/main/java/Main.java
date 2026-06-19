@@ -19,12 +19,17 @@ public class Main {
 
             String redirectStdout = null;
             String redirectStderr = null;
+            boolean appendStdout = false;
             List<String> cleanTokens = new ArrayList<>();
 
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
-                if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                if ((t.equals(">>") || t.equals("1>>")) && i + 1 < tokens.size()) {
                     redirectStdout = tokens.get(++i);
+                    appendStdout = true;
+                } else if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                    redirectStdout = tokens.get(++i);
+                    appendStdout = false;
                 } else if (t.equals("2>") && i + 1 < tokens.size()) {
                     redirectStderr = tokens.get(++i);
                 } else {
@@ -41,10 +46,10 @@ public class Main {
                 break;
             } else if (command.equals("echo")) {
                 String output = String.join(" ", arguments) + "\n";
-                writeOutput(output, redirectStdout);
+                writeOutput(output, redirectStdout, appendStdout);
                 createFileIfRedirected(redirectStderr);
             } else if (command.equals("pwd")) {
-                writeOutput(currentDir + "\n", redirectStdout);
+                writeOutput(currentDir + "\n", redirectStdout, appendStdout);
                 createFileIfRedirected(redirectStderr);
             } else if (command.equals("cd")) {
                 if (!arguments.isEmpty()) {
@@ -65,18 +70,18 @@ public class Main {
                             result = target + ": not found\n";
                         }
                     }
-                    writeOutput(result, redirectStdout);
+                    writeOutput(result, redirectStdout, appendStdout);
                     createFileIfRedirected(redirectStderr);
                 }
             } else {
-                runExternalCommand(command, arguments, redirectStdout, redirectStderr);
+                runExternalCommand(command, arguments, redirectStdout, appendStdout, redirectStderr);
             }
         }
     }
 
-    private static void writeOutput(String output, String redirectFile) throws Exception {
+    private static void writeOutput(String output, String redirectFile, boolean append) throws Exception {
         if (redirectFile != null) {
-            try (FileOutputStream fos = new FileOutputStream(redirectFile)) {
+            try (FileOutputStream fos = new FileOutputStream(redirectFile, append)) {
                 fos.write(output.getBytes());
             }
         } else {
@@ -176,7 +181,7 @@ public class Main {
     }
 
     private static void runExternalCommand(String command, List<String> arguments,
-            String redirectStdout, String redirectStderr) {
+            String redirectStdout, boolean appendStdout, String redirectStderr) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -192,7 +197,12 @@ public class Main {
             pb.directory(new File(currentDir));
 
             if (redirectStdout != null) {
-                pb.redirectOutput(new File(redirectStdout));
+                File outFile = new File(redirectStdout);
+                if (appendStdout) {
+                    pb.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
+                } else {
+                    pb.redirectOutput(outFile);
+                }
             } else {
                 pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
             }

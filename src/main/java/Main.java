@@ -6,7 +6,6 @@ import java.util.Scanner;
 
 public class Main {
     static String currentDir = System.getProperty("user.dir");
-    static int jobCounter = 0;
     static List<Job> jobs = new ArrayList<>();
 
     static class Job {
@@ -27,7 +26,16 @@ public class Main {
         }
     }
 
-    // reap completed jobs: print Done, remove from list
+    private static int nextJobNumber() {
+        List<Integer> used = new ArrayList<>();
+        for (Job job : jobs) {
+            used.add(job.number);
+        }
+        int n = 1;
+        while (used.contains(n)) n++;
+        return n;
+    }
+
     private static void reapJobs() {
         int last = jobs.size() - 1;
         List<Job> toRemove = new ArrayList<>();
@@ -48,7 +56,6 @@ public class Main {
         jobs.removeAll(toRemove);
     }
 
-    // print jobs list (running + done), reap done ones
     private static void listJobs() {
         int last = jobs.size() - 1;
         List<Job> toRemove = new ArrayList<>();
@@ -77,7 +84,6 @@ public class Main {
         Scanner sc = new Scanner(System.in);
 
         while (true) {
-            // reap before each prompt
             reapJobs();
 
             System.out.print("$ ");
@@ -304,11 +310,11 @@ public class Main {
             Process process = pb.start();
 
             if (background) {
-                jobCounter++;
+                int jobNumber = nextJobNumber();
                 long pid = process.pid();
                 String jobCommand = originalInput.replaceAll("\\s*&\\s*$", "").trim();
-                jobs.add(new Job(jobCounter, pid, jobCommand, process));
-                System.out.println("[" + jobCounter + "] " + pid);
+                jobs.add(new Job(jobNumber, pid, jobCommand, process));
+                System.out.println("[" + jobNumber + "] " + pid);
             } else {
                 process.waitFor();
             }

@@ -7,6 +7,25 @@ import java.util.Scanner;
 public class Main {
     static String currentDir = System.getProperty("user.dir");
     static int jobCounter = 0;
+    static List<Job> jobs = new ArrayList<>();
+
+    static class Job {
+        int number;
+        long pid;
+        String command;
+        Process process;
+
+        Job(int number, long pid, String command, Process process) {
+            this.number = number;
+            this.pid = pid;
+            this.command = command;
+            this.process = process;
+        }
+
+        boolean isRunning() {
+            return process.isAlive();
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);
@@ -18,7 +37,6 @@ public class Main {
             List<String> tokens = parseInput(input);
             if (tokens.isEmpty()) continue;
 
-            // detect background job
             boolean background = false;
             if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
                 background = true;
@@ -71,7 +89,14 @@ public class Main {
                     handleCd(arguments.get(0));
                 }
             } else if (command.equals("jobs")) {
-                // no output when no background jobs
+                for (Job job : jobs) {
+                    if (job.isRunning()) {
+                        // format: [N]+  Running                 command &
+                        // "Running" padded to 24 chars total
+                        String status = String.format("%-24s", "Running");
+                        System.out.println("[" + job.number + "]+  " + status + job.command + " &");
+                    }
+                }
             } else if (command.equals("type")) {
                 if (!arguments.isEmpty()) {
                     String target = arguments.get(0);
@@ -92,7 +117,7 @@ public class Main {
                 }
             } else {
                 runExternalCommand(command, arguments, redirectStdout, appendStdout,
-                        redirectStderr, appendStderr, background);
+                        redirectStderr, appendStderr, background, input.trim());
             }
         }
     }
@@ -201,7 +226,7 @@ public class Main {
     private static void runExternalCommand(String command, List<String> arguments,
             String redirectStdout, boolean appendStdout,
             String redirectStderr, boolean appendStderr,
-            boolean background) {
+            boolean background, String originalInput) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -239,8 +264,10 @@ public class Main {
             if (background) {
                 jobCounter++;
                 long pid = process.pid();
+                // store command without trailing &
+                String jobCommand = originalInput.replaceAll("\\s*&\\s*$", "").trim();
+                jobs.add(new Job(jobCounter, pid, jobCommand, process));
                 System.out.println("[" + jobCounter + "] " + pid);
-                // don't call waitFor() — let it run in background
             } else {
                 process.waitFor();
             }

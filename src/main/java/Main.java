@@ -20,6 +20,7 @@ public class Main {
             String redirectStdout = null;
             String redirectStderr = null;
             boolean appendStdout = false;
+            boolean appendStderr = false;
             List<String> cleanTokens = new ArrayList<>();
 
             for (int i = 0; i < tokens.size(); i++) {
@@ -30,8 +31,12 @@ public class Main {
                 } else if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
                     redirectStdout = tokens.get(++i);
                     appendStdout = false;
+                } else if (t.equals("2>>") && i + 1 < tokens.size()) {
+                    redirectStderr = tokens.get(++i);
+                    appendStderr = true;
                 } else if (t.equals("2>") && i + 1 < tokens.size()) {
                     redirectStderr = tokens.get(++i);
+                    appendStderr = false;
                 } else {
                     cleanTokens.add(t);
                 }
@@ -47,10 +52,10 @@ public class Main {
             } else if (command.equals("echo")) {
                 String output = String.join(" ", arguments) + "\n";
                 writeOutput(output, redirectStdout, appendStdout);
-                createFileIfRedirected(redirectStderr);
+                createFileIfRedirected(redirectStderr, appendStderr);
             } else if (command.equals("pwd")) {
                 writeOutput(currentDir + "\n", redirectStdout, appendStdout);
-                createFileIfRedirected(redirectStderr);
+                createFileIfRedirected(redirectStderr, appendStderr);
             } else if (command.equals("cd")) {
                 if (!arguments.isEmpty()) {
                     handleCd(arguments.get(0));
@@ -71,10 +76,10 @@ public class Main {
                         }
                     }
                     writeOutput(result, redirectStdout, appendStdout);
-                    createFileIfRedirected(redirectStderr);
+                    createFileIfRedirected(redirectStderr, appendStderr);
                 }
             } else {
-                runExternalCommand(command, arguments, redirectStdout, appendStdout, redirectStderr);
+                runExternalCommand(command, arguments, redirectStdout, appendStdout, redirectStderr, appendStderr);
             }
         }
     }
@@ -89,9 +94,9 @@ public class Main {
         }
     }
 
-    private static void createFileIfRedirected(String redirectFile) throws Exception {
+    private static void createFileIfRedirected(String redirectFile, boolean append) throws Exception {
         if (redirectFile != null) {
-            new FileOutputStream(redirectFile).close();
+            new FileOutputStream(redirectFile, append).close();
         }
     }
 
@@ -181,7 +186,7 @@ public class Main {
     }
 
     private static void runExternalCommand(String command, List<String> arguments,
-            String redirectStdout, boolean appendStdout, String redirectStderr) {
+            String redirectStdout, boolean appendStdout, String redirectStderr, boolean appendStderr) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -198,17 +203,18 @@ public class Main {
 
             if (redirectStdout != null) {
                 File outFile = new File(redirectStdout);
-                if (appendStdout) {
-                    pb.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
-                } else {
-                    pb.redirectOutput(outFile);
-                }
+                pb.redirectOutput(appendStdout
+                        ? ProcessBuilder.Redirect.appendTo(outFile)
+                        : ProcessBuilder.Redirect.to(outFile));
             } else {
                 pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
             }
 
             if (redirectStderr != null) {
-                pb.redirectError(new File(redirectStderr));
+                File errFile = new File(redirectStderr);
+                pb.redirectError(appendStderr
+                        ? ProcessBuilder.Redirect.appendTo(errFile)
+                        : ProcessBuilder.Redirect.to(errFile));
             } else {
                 pb.redirectError(ProcessBuilder.Redirect.INHERIT);
             }

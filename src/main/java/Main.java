@@ -42,8 +42,10 @@ public class Main {
             } else if (command.equals("echo")) {
                 String output = String.join(" ", arguments) + "\n";
                 writeOutput(output, redirectStdout);
+                createFileIfRedirected(redirectStderr);
             } else if (command.equals("pwd")) {
                 writeOutput(currentDir + "\n", redirectStdout);
+                createFileIfRedirected(redirectStderr);
             } else if (command.equals("cd")) {
                 if (!arguments.isEmpty()) {
                     handleCd(arguments.get(0));
@@ -64,6 +66,7 @@ public class Main {
                         }
                     }
                     writeOutput(result, redirectStdout);
+                    createFileIfRedirected(redirectStderr);
                 }
             } else {
                 runExternalCommand(command, arguments, redirectStdout, redirectStderr);
@@ -78,6 +81,12 @@ public class Main {
             }
         } else {
             System.out.print(output);
+        }
+    }
+
+    private static void createFileIfRedirected(String redirectFile) throws Exception {
+        if (redirectFile != null) {
+            new FileOutputStream(redirectFile).close();
         }
     }
 

@@ -51,40 +51,51 @@ public class Main {
     }
 
     private static List<String> parseInput(String input) {
-        List<String> tokens = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        int i = 0;
+    List<String> tokens = new ArrayList<>();
+    StringBuilder current = new StringBuilder();
+    int i = 0;
 
-        while (i < input.length()) {
-            char c = input.charAt(i);
+    while (i < input.length()) {
+        char c = input.charAt(i);
 
-            if (c == '\'') {
-                // single quote: take everything literally until closing quote
-                i++;
-                while (i < input.length() && input.charAt(i) != '\'') {
-                    current.append(input.charAt(i));
-                    i++;
-                }
-                i++; // skip closing quote
-            } else if (c == ' ' || c == '\t') {
-                // whitespace outside quotes: delimiter
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
-                i++;
-            } else {
-                current.append(c);
+        if (c == '\'') {
+            // single quote: everything literal until closing quote
+            i++;
+            while (i < input.length() && input.charAt(i) != '\'') {
+                current.append(input.charAt(i));
                 i++;
             }
-        }
+            i++; // skip closing quote
 
-        if (current.length() > 0) {
-            tokens.add(current.toString());
-        }
+        } else if (c == '"') {
+            // double quote: everything literal until closing quote (for now)
+            i++;
+            while (i < input.length() && input.charAt(i) != '"') {
+                current.append(input.charAt(i));
+                i++;
+            }
+            i++; // skip closing quote
 
-        return tokens;
+        } else if (c == ' ' || c == '\t') {
+            // whitespace outside quotes: token delimiter
+            if (current.length() > 0) {
+                tokens.add(current.toString());
+                current.setLength(0);
+            }
+            i++;
+
+        } else {
+            current.append(c);
+            i++;
+        }
     }
+
+    if (current.length() > 0) {
+        tokens.add(current.toString());
+    }
+
+    return tokens;
+}
 
     private static void handleCd(String path) {
         if (path.equals("~")) {

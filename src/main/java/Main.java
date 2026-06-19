@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -16,15 +17,32 @@ public class Main {
             List<String> tokens = parseInput(input);
             if (tokens.isEmpty()) continue;
 
-            String command = tokens.get(0);
-            List<String> arguments = tokens.subList(1, tokens.size());
+            // detect redirection: look for > or 1> in token list
+            String redirectFile = null;
+            List<String> cleanTokens = new ArrayList<>();
+
+            for (int i = 0; i < tokens.size(); i++) {
+                String t = tokens.get(i);
+                if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                    redirectFile = tokens.get(i + 1);
+                    i++; // skip the filename token too
+                } else {
+                    cleanTokens.add(t);
+                }
+            }
+
+            if (cleanTokens.isEmpty()) continue;
+
+            String command = cleanTokens.get(0);
+            List<String> arguments = cleanTokens.subList(1, cleanTokens.size());
 
             if (command.equals("exit")) {
                 break;
             } else if (command.equals("echo")) {
-                System.out.println(String.join(" ", arguments));
+                String output = String.join(" ", arguments) + "\n";
+                writeOutput(output, redirectFile);
             } else if (command.equals("pwd")) {
-                System.out.println(currentDir);
+                writeOutput(currentDir + "\n", redirectFile);
             } else if (command.equals("cd")) {
                 if (!arguments.isEmpty()) {
                     handleCd(arguments.get(0));
@@ -32,21 +50,34 @@ public class Main {
             } else if (command.equals("type")) {
                 if (!arguments.isEmpty()) {
                     String target = arguments.get(0);
+                    String result;
                     if (target.equals("echo") || target.equals("exit") || target.equals("type")
                             || target.equals("pwd") || target.equals("cd")) {
-                        System.out.println(target + " is a shell builtin");
+                        result = target + " is a shell builtin\n";
                     } else {
                         String foundPath = findInPath(target);
                         if (foundPath != null) {
-                            System.out.println(target + " is " + foundPath);
+                            result = target + " is " + foundPath + "\n";
                         } else {
-                            System.out.println(target + ": not found");
+                            result = target + ": not found\n";
                         }
                     }
+                    writeOutput(result, redirectFile);
                 }
             } else {
-                runExternalCommand(command, arguments);
+                runExternalCommand(command, arguments, redirectFile);
             }
+        }
+    }
+
+    // writes string to file if redirectFile set, otherwise prints to stdout
+    private static void writeOutput(String output, String redirectFile) throws Exception {
+        if (redirectFile != null) {
+            try (FileOutputStream fos = new FileOutputStream(redirectFile)) {
+                fos.write(output.getBytes());
+            }
+        } else {
+            System.out.print(output);
         }
     }
 
@@ -59,24 +90,19 @@ public class Main {
             char c = input.charAt(i);
 
             if (c == '\\') {
-                // outside quotes: skip backslash, take next char literally
                 i++;
                 if (i < input.length()) {
                     current.append(input.charAt(i));
                     i++;
                 }
-
             } else if (c == '\'') {
-                // single quote: everything literal until closing quote
                 i++;
                 while (i < input.length() && input.charAt(i) != '\'') {
                     current.append(input.charAt(i));
                     i++;
                 }
-                i++; // skip closing quote
-
+                i++;
             } else if (c == '"') {
-                // double quote: everything literal except \" and \\
                 i++;
                 while (i < input.length() && input.charAt(i) != '"') {
                     if (input.charAt(i) == '\\' && i + 1 < input.length()) {
@@ -93,16 +119,13 @@ public class Main {
                         i++;
                     }
                 }
-                i++; // skip closing quote
-
+                i++;
             } else if (c == ' ' || c == '\t') {
-                // whitespace outside quotes: token delimiter
                 if (current.length() > 0) {
                     tokens.add(current.toString());
                     current.setLength(0);
                 }
                 i++;
-
             } else {
                 current.append(c);
                 i++;
@@ -143,7 +166,7 @@ public class Main {
         }
     }
 
-    private static void runExternalCommand(String command, List<String> arguments) {
+    private static void runExternalCommand(String command, List<String> arguments, String redirectFile) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -157,7 +180,15 @@ public class Main {
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(new File(currentDir));
-            pb.inheritIO();
+
+            if (redirectFile != null) {
+                // stdout → file, stderr stays on terminal
+                pb.redirectOutput(new File(redirectFile));
+                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            } else {
+                pb.inheritIO();
+            }
+
             Process process = pb.start();
             process.waitFor();
         } catch (Exception e) {

@@ -109,113 +109,114 @@ public class Main {
     }
 
     private static void runPipeline(List<String> tokens) throws Exception {
-        // split into segments
-        List<List<String>> segments = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-        for (String t : tokens) {
-            if (t.equals("|")) {
-                if (!current.isEmpty()) segments.add(current);
-                current = new ArrayList<>();
-            } else {
-                current.add(t);
-            }
+    List<List<String>> segments = new ArrayList<>();
+    List<String> current = new ArrayList<>();
+    for (String t : tokens) {
+        if (t.equals("|")) {
+            if (!current.isEmpty()) segments.add(current);
+            current = new ArrayList<>();
+        } else {
+            current.add(t);
         }
-        if (!current.isEmpty()) segments.add(current);
-        if (segments.size() < 2) return;
+    }
+    if (!current.isEmpty()) segments.add(current);
+    if (segments.size() < 2) return;
 
-        int n = segments.size();
+    // check if any segment is a builtin
+    boolean hasBuiltin = false;
+    for (List<String> seg : segments) {
+        if (isBuiltin(seg.get(0))) { hasBuiltin = true; break; }
+    }
 
-        // create pipes between segments: pipe[i] connects segment i output to segment i+1 input
-        PipedOutputStream[] pipeOuts = new PipedOutputStream[n - 1];
-        PipedInputStream[] pipeIns = new PipedInputStream[n - 1];
-        for (int i = 0; i < n - 1; i++) {
-            pipeOuts[i] = new PipedOutputStream();
-            pipeIns[i] = new PipedInputStream(pipeOuts[i], 65536);
-        }
-
-        List<Thread> threads = new ArrayList<>();
-        List<Process> processes = new ArrayList<>();
-
-        for (int i = 0; i < n; i++) {
+    if (!hasBuiltin) {
+        // all external: use OS-level startPipeline
+        List<ProcessBuilder> builders = new ArrayList<>();
+        for (int i = 0; i < segments.size(); i++) {
             List<String> seg = segments.get(i);
             String cmd = seg.get(0);
-
-            // determine stdin/stdout for this segment
-            InputStream segIn = (i == 0) ? System.in : pipeIns[i - 1];
-            OutputStream segOut = (i == n - 1) ? System.out : pipeOuts[i];
-
-            if (isBuiltin(cmd)) {
-                final List<String> s = seg;
-                final InputStream si = segIn;
-                final OutputStream so = segOut;
-                Thread t = new Thread(() -> {
-                    try {
-                        runBuiltin(s, si, so);
-                        if (so != System.out) so.close();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-                threads.add(t);
-            } else {
-                // external command
-                if (findInPath(cmd) == null) {
-                    System.err.println(cmd + ": command not found");
-                    return;
-                }
-
-                ProcessBuilder pb = new ProcessBuilder(seg);
-                pb.directory(new File(currentDir));
-                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-                // for external: use pipe streams via threads
-                Process proc = pb.start();
-                processes.add(proc);
-
-                // feed stdin
-                if (i > 0) {
-                    final InputStream src = segIn;
-                    final OutputStream dst = proc.getOutputStream();
-                    Thread feeder = new Thread(() -> {
-                        try { src.transferTo(dst); dst.close(); } catch (Exception ignored) {}
-                    });
-                    feeder.setDaemon(true);
-                    feeder.start();
-                    threads.add(feeder);
-                }
-
-                // collect stdout
-                if (i < n - 1) {
-                    final InputStream src = proc.getInputStream();
-                    final OutputStream dst = segOut;
-                    Thread collector = new Thread(() -> {
-                        try { src.transferTo(dst); dst.close(); } catch (Exception ignored) {}
-                    });
-                    collector.setDaemon(true);
-                    collector.start();
-                    threads.add(collector);
-                } else {
-                    // last segment external: inherit stdout
-                    final InputStream src = proc.getInputStream();
-                    Thread printer = new Thread(() -> {
-                        try { src.transferTo(System.out); } catch (Exception ignored) {}
-                    });
-                    printer.setDaemon(true);
-                    printer.start();
-                    threads.add(printer);
-                }
+            if (findInPath(cmd) == null) {
+                System.err.println(cmd + ": command not found");
+                return;
             }
+            ProcessBuilder pb = new ProcessBuilder(seg);
+            pb.directory(new File(currentDir));
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            if (i == 0) pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            if (i == segments.size() - 1) pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            builders.add(pb);
         }
-
-        // start builtin threads
-        for (Thread t : threads) {
-            if (!t.isAlive() && t.getState() == Thread.State.NEW) t.start();
-        }
-
-        // wait for all
+        List<Process> processes = ProcessBuilder.startPipeline(builders);
         for (Process p : processes) p.waitFor();
-        for (Thread t : threads) t.join();
+        return;
     }
+
+    // has builtins: manual piped threading
+    int n = segments.size();
+    PipedOutputStream[] pipeOuts = new PipedOutputStream[n - 1];
+    PipedInputStream[] pipeIns = new PipedInputStream[n - 1];
+    for (int i = 0; i < n - 1; i++) {
+        pipeOuts[i] = new PipedOutputStream();
+        pipeIns[i] = new PipedInputStream(pipeOuts[i], 65536);
+    }
+
+    List<Thread> threads = new ArrayList<>();
+    List<Process> processes = new ArrayList<>();
+
+    for (int i = 0; i < n; i++) {
+        List<String> seg = segments.get(i);
+        String cmd = seg.get(0);
+        InputStream segIn = (i == 0) ? System.in : pipeIns[i - 1];
+        OutputStream segOut = (i == n - 1) ? System.out : pipeOuts[i];
+
+        if (isBuiltin(cmd)) {
+            final List<String> s = seg;
+            final InputStream si = segIn;
+            final OutputStream so = segOut;
+            Thread t = new Thread(() -> {
+                try {
+                    runBuiltin(s, si, so);
+                    if (so != System.out) so.close();
+                } catch (Exception e) { e.printStackTrace(); }
+            });
+            threads.add(t);
+        } else {
+            if (findInPath(cmd) == null) {
+                System.err.println(cmd + ": command not found");
+                return;
+            }
+            ProcessBuilder pb = new ProcessBuilder(seg);
+            pb.directory(new File(currentDir));
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            Process proc = pb.start();
+            processes.add(proc);
+
+            if (i > 0) {
+                final InputStream src = segIn;
+                final OutputStream dst = proc.getOutputStream();
+                Thread feeder = new Thread(() -> {
+                    try { src.transferTo(dst); dst.close(); } catch (Exception ignored) {}
+                });
+                feeder.setDaemon(true);
+                threads.add(feeder);
+            }
+
+            final InputStream src = proc.getInputStream();
+            final OutputStream dst = segOut;
+            Thread collector = new Thread(() -> {
+                try {
+                    src.transferTo(dst);
+                    if (dst != System.out) dst.close();
+                } catch (Exception ignored) {}
+            });
+            collector.setDaemon(true);
+            threads.add(collector);
+        }
+    }
+
+    for (Thread t : threads) t.start();
+    for (Process p : processes) p.waitFor();
+    for (Thread t : threads) t.join();
+}
 
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);

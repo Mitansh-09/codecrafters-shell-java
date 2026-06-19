@@ -89,14 +89,21 @@ public class Main {
                     handleCd(arguments.get(0));
                 }
             } else if (command.equals("jobs")) {
-                for (Job job : jobs) {
-                    if (job.isRunning()) {
-                        // format: [N]+  Running                 command &
-                        // "Running" padded to 24 chars total
-                        String status = String.format("%-24s", "Running");
-                        System.out.println("[" + job.number + "]+  " + status + job.command + " &");
-                    }
-                }
+    List<Job> running = new ArrayList<>();
+    for (Job job : jobs) {
+        if (job.isRunning()) running.add(job);
+    }
+    int last = running.size() - 1;
+    for (int i = 0; i < running.size(); i++) {
+        Job job = running.get(i);
+        char marker;
+        if (i == last) marker = '+';
+        else if (i == last - 1) marker = '-';
+        else marker = ' ';
+        String status = String.format("%-24s", "Running");
+        System.out.println("[" + job.number + "]" + marker + "  " + status + job.command + " &");
+    }
+}
             } else if (command.equals("type")) {
                 if (!arguments.isEmpty()) {
                     String target = arguments.get(0);

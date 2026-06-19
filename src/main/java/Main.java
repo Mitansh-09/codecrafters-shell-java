@@ -27,10 +27,59 @@ public class Main {
         }
     }
 
+    // reap completed jobs: print Done, remove from list
+    private static void reapJobs() {
+        int last = jobs.size() - 1;
+        List<Job> toRemove = new ArrayList<>();
+
+        for (int i = 0; i < jobs.size(); i++) {
+            Job job = jobs.get(i);
+            if (!job.isRunning()) {
+                char marker;
+                if (i == last) marker = '+';
+                else if (i == last - 1) marker = '-';
+                else marker = ' ';
+                String status = String.format("%-24s", "Done");
+                System.out.println("[" + job.number + "]" + marker + "  " + status + job.command);
+                toRemove.add(job);
+            }
+        }
+
+        jobs.removeAll(toRemove);
+    }
+
+    // print jobs list (running + done), reap done ones
+    private static void listJobs() {
+        int last = jobs.size() - 1;
+        List<Job> toRemove = new ArrayList<>();
+
+        for (int i = 0; i < jobs.size(); i++) {
+            Job job = jobs.get(i);
+            char marker;
+            if (i == last) marker = '+';
+            else if (i == last - 1) marker = '-';
+            else marker = ' ';
+
+            if (job.isRunning()) {
+                String status = String.format("%-24s", "Running");
+                System.out.println("[" + job.number + "]" + marker + "  " + status + job.command + " &");
+            } else {
+                String status = String.format("%-24s", "Done");
+                System.out.println("[" + job.number + "]" + marker + "  " + status + job.command);
+                toRemove.add(job);
+            }
+        }
+
+        jobs.removeAll(toRemove);
+    }
+
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);
 
         while (true) {
+            // reap before each prompt
+            reapJobs();
+
             System.out.print("$ ");
             String input = sc.nextLine();
 
@@ -89,27 +138,7 @@ public class Main {
                     handleCd(arguments.get(0));
                 }
             } else if (command.equals("jobs")) {
-                int last = jobs.size() - 1;
-                List<Job> toRemove = new ArrayList<>();
-
-                for (int i = 0; i < jobs.size(); i++) {
-                    Job job = jobs.get(i);
-                    char marker;
-                    if (i == last) marker = '+';
-                    else if (i == last - 1) marker = '-';
-                    else marker = ' ';
-
-                    if (job.isRunning()) {
-                        String status = String.format("%-24s", "Running");
-                        System.out.println("[" + job.number + "]" + marker + "  " + status + job.command + " &");
-                    } else {
-                        String status = String.format("%-24s", "Done");
-                        System.out.println("[" + job.number + "]" + marker + "  " + status + job.command);
-                        toRemove.add(job);
-                    }
-                }
-
-                jobs.removeAll(toRemove);
+                listJobs();
             } else if (command.equals("type")) {
                 if (!arguments.isEmpty()) {
                     String target = arguments.get(0);
@@ -298,7 +327,7 @@ public class Main {
                 return file.getAbsolutePath();
             }
         }
-        
+
         return null;
     }
 }

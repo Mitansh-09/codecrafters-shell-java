@@ -17,15 +17,16 @@ public class Main {
             List<String> tokens = parseInput(input);
             if (tokens.isEmpty()) continue;
 
-            // detect redirection: look for > or 1> in token list
-            String redirectFile = null;
+            String redirectStdout = null;
+            String redirectStderr = null;
             List<String> cleanTokens = new ArrayList<>();
 
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
                 if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
-                    redirectFile = tokens.get(i + 1);
-                    i++; // skip the filename token too
+                    redirectStdout = tokens.get(++i);
+                } else if (t.equals("2>") && i + 1 < tokens.size()) {
+                    redirectStderr = tokens.get(++i);
                 } else {
                     cleanTokens.add(t);
                 }
@@ -40,9 +41,9 @@ public class Main {
                 break;
             } else if (command.equals("echo")) {
                 String output = String.join(" ", arguments) + "\n";
-                writeOutput(output, redirectFile);
+                writeOutput(output, redirectStdout);
             } else if (command.equals("pwd")) {
-                writeOutput(currentDir + "\n", redirectFile);
+                writeOutput(currentDir + "\n", redirectStdout);
             } else if (command.equals("cd")) {
                 if (!arguments.isEmpty()) {
                     handleCd(arguments.get(0));
@@ -62,15 +63,14 @@ public class Main {
                             result = target + ": not found\n";
                         }
                     }
-                    writeOutput(result, redirectFile);
+                    writeOutput(result, redirectStdout);
                 }
             } else {
-                runExternalCommand(command, arguments, redirectFile);
+                runExternalCommand(command, arguments, redirectStdout, redirectStderr);
             }
         }
     }
 
-    // writes string to file if redirectFile set, otherwise prints to stdout
     private static void writeOutput(String output, String redirectFile) throws Exception {
         if (redirectFile != null) {
             try (FileOutputStream fos = new FileOutputStream(redirectFile)) {
@@ -166,7 +166,8 @@ public class Main {
         }
     }
 
-    private static void runExternalCommand(String command, List<String> arguments, String redirectFile) {
+    private static void runExternalCommand(String command, List<String> arguments,
+            String redirectStdout, String redirectStderr) {
         String commandPath = findInPath(command);
         if (commandPath == null) {
             System.out.println(command + ": command not found");
@@ -181,12 +182,16 @@ public class Main {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(new File(currentDir));
 
-            if (redirectFile != null) {
-                // stdout → file, stderr stays on terminal
-                pb.redirectOutput(new File(redirectFile));
-                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            if (redirectStdout != null) {
+                pb.redirectOutput(new File(redirectStdout));
             } else {
-                pb.inheritIO();
+                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            }
+
+            if (redirectStderr != null) {
+                pb.redirectError(new File(redirectStderr));
+            } else {
+                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
             }
 
             Process process = pb.start();

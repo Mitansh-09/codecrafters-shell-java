@@ -114,26 +114,26 @@ public class Main {
     }
 
     private static void runExternalCommand(String command, List<String> arguments) {
-        String commandPath = findInPath(command);
-        if (commandPath == null) {
-            System.out.println(command + ": command not found");
-            return;
-        }
-
-        try {
-            List<String> cmd = new ArrayList<>();
-            cmd.add(commandPath);
-            cmd.addAll(arguments);
-
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(new File(currentDir));
-            pb.inheritIO();
-            Process process = pb.start();
-            process.waitFor();
-        } catch (Exception e) {
-            System.out.println(command + ": command not found");
-        }
+       String commandPath = findInPath(command);
+    if (commandPath == null) {
+        System.out.println(command + ": command not found");
+        return;
     }
+
+    try {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(command);        // use original name, not commandPath
+        cmd.addAll(arguments);
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.directory(new File(currentDir));
+        pb.inheritIO();
+        Process process = pb.start();
+        process.waitFor();
+    } catch (Exception e) {
+        System.out.println(command + ": command not found");
+    }
+}
 
     private static String findInPath(String command) {
         String pathEnv = System.getenv("PATH");

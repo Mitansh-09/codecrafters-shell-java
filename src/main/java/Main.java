@@ -60,12 +60,14 @@ public class Main {
                 if (!arguments.isEmpty()) {
                     handleCd(arguments.get(0));
                 }
+            } else if (command.equals("jobs")) {
+                // no output when no background jobs
             } else if (command.equals("type")) {
                 if (!arguments.isEmpty()) {
                     String target = arguments.get(0);
                     String result;
                     if (target.equals("echo") || target.equals("exit") || target.equals("type")
-                            || target.equals("pwd") || target.equals("cd")) {
+                            || target.equals("pwd") || target.equals("cd") || target.equals("jobs")) {
                         result = target + " is a shell builtin\n";
                     } else {
                         String foundPath = findInPath(target);

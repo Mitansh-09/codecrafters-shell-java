@@ -50,7 +50,7 @@ public class Main {
         }
     }
 
-    private static List<String> parseInput(String input) {
+   private static List<String> parseInput(String input) {
     List<String> tokens = new ArrayList<>();
     StringBuilder current = new StringBuilder();
     int i = 0;
@@ -58,7 +58,15 @@ public class Main {
     while (i < input.length()) {
         char c = input.charAt(i);
 
-        if (c == '\'') {
+        if (c == '\\') {
+            // outside quotes: skip backslash, take next char literally
+            i++;
+            if (i < input.length()) {
+                current.append(input.charAt(i));
+                i++;
+            }
+
+        } else if (c == '\'') {
             // single quote: everything literal until closing quote
             i++;
             while (i < input.length() && input.charAt(i) != '\'') {
@@ -68,7 +76,7 @@ public class Main {
             i++; // skip closing quote
 
         } else if (c == '"') {
-            // double quote: everything literal until closing quote (for now)
+            // double quote: everything literal until closing quote
             i++;
             while (i < input.length() && input.charAt(i) != '"') {
                 current.append(input.charAt(i));

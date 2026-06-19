@@ -1,7 +1,5 @@
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -69,6 +67,48 @@ public class Main {
         jobs.removeAll(toRemove);
     }
 
+    private static void runPipeline(List<String> tokens) throws Exception {
+        List<List<String>> segments = new ArrayList<>();
+        List<String> current = new ArrayList<>();
+        for (String t : tokens) {
+            if (t.equals("|")) {
+                if (!current.isEmpty()) segments.add(current);
+                current = new ArrayList<>();
+            } else {
+                current.add(t);
+            }
+        }
+        if (!current.isEmpty()) segments.add(current);
+        if (segments.size() < 2) return;
+
+        List<ProcessBuilder> builders = new ArrayList<>();
+
+        for (int i = 0; i < segments.size(); i++) {
+            List<String> seg = segments.get(i);
+            String cmd = seg.get(0);
+            if (findInPath(cmd) == null) {
+                System.err.println(cmd + ": command not found");
+                return;
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(seg);
+            pb.directory(new File(currentDir));
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+            if (i == 0) {
+                pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            }
+            if (i == segments.size() - 1) {
+                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            }
+
+            builders.add(pb);
+        }
+
+        List<Process> processes = ProcessBuilder.startPipeline(builders);
+        for (Process p : processes) p.waitFor();
+    }
+
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);
 
@@ -80,7 +120,6 @@ public class Main {
             List<String> tokens = parseInput(input);
             if (tokens.isEmpty()) continue;
 
-            // check for pipeline
             if (tokens.contains("|")) {
                 runPipeline(tokens);
                 continue;
@@ -156,75 +195,6 @@ public class Main {
                 runExternalCommand(command, arguments, redirectStdout, appendStdout,
                         redirectStderr, appendStderr, background, input.trim());
             }
-        }
-    }
-
-    // split token list on | and run as a chain of piped processes
-    private static void runPipeline(List<String> tokens) throws Exception {
-        // split into segments
-        List<List<String>> segments = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-        for (String t : tokens) {
-            if (t.equals("|")) {
-                if (!current.isEmpty()) segments.add(current);
-                current = new ArrayList<>();
-            } else {
-                current.add(t);
-            }
-        }
-        if (!current.isEmpty()) segments.add(current);
-
-        if (segments.size() < 2) return;
-
-        // start all processes, chaining output to input
-        List<Process> processes = new ArrayList<>();
-        InputStream prevOutput = null;
-
-        for (int i = 0; i < segments.size(); i++) {
-            List<String> seg = segments.get(i);
-            String cmd = seg.get(0);
-            String cmdPath = findInPath(cmd);
-            if (cmdPath == null) {
-                System.err.println(cmd + ": command not found");
-                return;
-            }
-
-            ProcessBuilder pb = new ProcessBuilder(seg);
-            pb.directory(new File(currentDir));
-            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-            if (i == segments.size() - 1) {
-                // last process: stdout goes to terminal
-                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-            }
-            // stdin and intermediate stdout handled manually via streams
-
-            Process proc = pb.start();
-            processes.add(proc);
-
-            // pipe previous output into this process's stdin
-            if (prevOutput != null) {
-                final InputStream src = prevOutput;
-                final OutputStream dst = proc.getOutputStream();
-                Thread piper = new Thread(() -> {
-                    try {
-                        src.transferTo(dst);
-                        dst.close();
-                    } catch (Exception ignored) {}
-                });
-                piper.setDaemon(true);
-                piper.start();
-            }
-
-            if (i < segments.size() - 1) {
-                // not the last: capture this process's stdout for next
-                prevOutput = proc.getInputStream();
-            }
-        }
-
-        // wait for all processes to finish
-        for (Process p : processes) {
-            p.waitFor();
         }
     }
 

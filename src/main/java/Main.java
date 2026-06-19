@@ -42,6 +42,14 @@ public class Main {
     }
 
     private static void handleCd(String path) {
+        
+        if (path.equals("~")) {
+        path = System.getenv("HOME");
+        if (path == null) {
+            System.out.println("cd: HOME not set");
+            return;
+        }
+    }
     File dir = new File(path);
 
     if (!dir.isAbsolute()) {
